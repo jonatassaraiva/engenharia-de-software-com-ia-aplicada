@@ -1,4 +1,78 @@
-import tf from '@tensorflow/tfjs-node';
+import tf, { train } from '@tensorflow/tfjs-node';
+
+// =============================================================================
+// ARQUITETURA DA REDE NEURAL
+// =============================================================================
+// Uma rede neural é composta por camadas de neurônios interligados que aprendem
+// a mapear entradas (características de pessoas) para saídas (categorias de plano).
+//
+// Fluxo dos dados:
+//   [Entrada: 7 características] → [Camada Oculta: 80 neurônios] → [Saída: 3 categorias]
+//
+// Camadas desta rede:
+//   1. Camada de Entrada  → recebe 7 características por pessoa
+//   2. Camada Oculta      → 80 neurônios aprendem padrões intermediários
+//   3. Camada de Saída    → 3 neurônios geram probabilidades para cada categoria
+//                           (premium | medium | basic)
+// =============================================================================
+async function trainModel(inputShape, outputShape) {
+    // 1 - Criamos um modelo sequencial, que é uma pilha linear de camadas.
+    const model = tf.sequential();
+
+    // 2 - Camada oculta
+    // Adicionamos uma camada densa (fully connected) com 80 neurônios e função de ativação ReLU.
+    // - units: 80 → número de neurônios nesta camada, responsáveis por aprender padrões nos dados.
+    // - activation: 'relu' → função que elimina valores negativos (max(0, x)), ajudando o modelo
+    //   a aprender relações não-lineares sem o problema de vanishing gradient.
+    // - inputShape: [7] → formato de entrada com 7 características por pessoa:
+    //     [idade_normalizada, azul, vermelho, verde, São Paulo, Rio, Curitiba]
+    //   onde a idade é normalizada entre 0 e 1, e as demais são valores one-hot encoded.
+    model.add(tf.layers.dense({
+        units: 80,
+        activation: 'relu',
+        inputShape: [7]
+    }));
+
+    // 3 -
+    // Adicionamos uma camada de saída densa com 3 neurônios (correspondente às 3 categorias: premium, medium, basic).
+    // - units: 3 → número de neurônios na camada de saída, correspondendo às 3 categorias que queremos prever.
+    // - activation: 'softmax' → função que converte as saídas em probabilidades, garantindo que a soma das saídas seja 1.
+    //   Isso é essencial para problemas de classificação multi-classe, onde cada neurônio representa a probabilidade de uma classe específica.
+    model.add(tf.layers.dense({
+        units: 3,
+        activation: 'softmax'
+     }));
+
+    // Para compilar o modelo, vamos usar o otimizador Adam, a função de perda categoricalCrossentropy
+    // (pois é um problema de classificação multi-classe) e a métrica de acurácia para avaliar o desempenho
+    // durante o treinamento.
+    // O otimizador Adam é um algoritmo que ajusta os pesos da rede neural durante o treino para minimizar erros e ajusta a taxa de aprendizado individualmente para cada peso.
+    // A função de perda categoricalCrossentropy é usada para medir a diferença entre as distribuições de probabilidade previstas pelo modelo e as distribuições reais (labels) em problemas de classificação multi-classe.
+    // A métrica de acurácia é usada para avaliar a proporção de previsões corretas feitas pelo modelo em relação ao total de previsões.
+    model.compile({
+        optimizer: 'adam',
+        loss: 'categoricalCrossentropy',
+        metrics: ['accuracy']
+    });
+
+    // Treinamos o modelo usando os dados de entrada (inputXs) e as labels (outputYs).
+    // - epochs: 100 → número de vezes que o modelo passará por todo o conjunto de dados durante o treinamento.
+    //   Um número maior de epochs pode levar a um melhor aprendizado, mas também pode causar overfitting se for muito alto.
+    await model.fit(inputXs, outputYs, {
+        epochs: 100, // Número de vezes que o modelo passará por todo o conjunto de dados durante o treinamento.
+        shuffle: true, // Embaralha os dados a cada época para melhorar a generalização do modelo.
+        verbose: 0, // Define o nível de verbosidade do treinamento (0 = sem logs, 1 = barra de progresso, 2 = uma linha por época).
+        callbacks: {
+            onEpochEnd: (epoch, logs) => {
+                if ((epoch + 1) % 10 === 0) { // A cada 10 épocas, imprime o progresso
+                    console.log(`Epoch ${epoch + 1}: loss = ${logs.loss.toFixed(4)}, accuracy = ${(logs.acc * 100).toFixed(2)}%`);
+                }
+            }
+        }
+    });
+
+    return model;
+}
 
 // Exemplo de pessoas para treino (cada pessoa com idade, cor e localização)
 // const pessoas = [
@@ -38,3 +112,6 @@ const outputYs = tf.tensor2d(tensorLabels)
 
 inputXs.print();
 outputYs.print();
+
+// Quantos mais dados de treino tivermos, melhor o modelo pode aprender a generalizar e fazer previsões precisas.
+const model = trainModel(inputXs.shape[1], outputYs.shape[1]);
