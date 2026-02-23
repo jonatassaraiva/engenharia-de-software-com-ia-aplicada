@@ -74,6 +74,27 @@ async function trainModel(inputShape, outputShape) {
     return model;
 }
 
+async function predict(model, pessoa) {
+    // Convertendo os dados de entrada da pessoa para um tensor 2D, pois o modelo espera uma matriz de entradas.
+    // 2d porque o modelo foi treinado com um formato de entrada de [número de amostras, número de características], e mesmo para uma única pessoa, precisamos manter essa estrutura.
+    const tfInput = tf.tensor2d([pessoa]);
+
+    // Fazemos a previsão usando o modelo treinado.
+    // O método predict retorna um tensor com as probabilidades para cada categoria (premium, medium, basic).
+    const previsoes = model.predict(tfInput);
+    const previsoesArray = await previsoes.array();
+    console.log("Previsões (probabilidades para cada categoria):", previsoesArray);
+
+    // Log das probabilidades em % para cada categoria
+    console.log(`Probabilidades em %: premium = ${(previsoesArray[0][0] * 100).toFixed(2)}%, medium = ${(previsoesArray[0][1] * 100).toFixed(2)}%, basic = ${(previsoesArray[0][2] * 100).toFixed(2)}%`);
+
+    // Para obter a categoria prevista, encontramos o índice do neurônio com a maior probabilidade.
+    // argMax(-1) retorna o índice do valor máximo ao longo do último eixo (neste caso, o eixo das categorias).
+    const indiceCategoria = previsoes.argMax(-1).dataSync()[0];
+    const categoriaPrevista = labelsNomes[indiceCategoria];
+    console.log(`Categoria prevista para a pessoa: ${categoriaPrevista}`);
+}
+
 // Exemplo de pessoas para treino (cada pessoa com idade, cor e localização)
 // const pessoas = [
 //     { nome: "Erick", idade: 30, cor: "azul", localizacao: "São Paulo" },
@@ -83,6 +104,7 @@ async function trainModel(inputShape, outputShape) {
 
 // Vetores de entrada com valores já normalizados e one-hot encoded
 // Ordem: [idade_normalizada, azul, vermelho, verde, São Paulo, Rio, Curitiba]
+// Normalização da idade: idade_min = 25, idade_max = 40 → idade_normalizada = (idade - 25) / (40 - 25)
 // const tensorPessoas = [
 //     [0.33, 1, 0, 0, 1, 0, 0], // Erick
 //     [0, 0, 1, 0, 0, 1, 0],    // Ana
@@ -114,4 +136,20 @@ inputXs.print();
 outputYs.print();
 
 // Quantos mais dados de treino tivermos, melhor o modelo pode aprender a generalizar e fazer previsões precisas.
-const model = trainModel(inputXs.shape[1], outputYs.shape[1]);
+const model = await trainModel(inputXs.shape[1], outputYs.shape[1]);
+
+// const pessoasTeste = [
+//     { nome: "Mariana", idade: 42, cor: "azul", localizacao: "São Paulo" },
+//     { nome: "Lucas", idade: 35, cor: "vermelho", localizacao: "Rio" },
+//     { nome: "Sofia", idade: 28, cor: "verde", localizacao: "Curitiba" }
+// ];
+
+const tensorPessoasTeste = [
+    [1, 1, 0, 0, 1, 0, 0], // Mariana
+    [0.66, 0, 1, 0, 0, 1, 0], // Lucas
+    [0.2, 0, 0, 1, 0, 0, 1]  // Sofia
+]
+
+await predict(model, tensorPessoasTeste[0]);
+await predict(model, tensorPessoasTeste[1]);
+await predict(model, tensorPessoasTeste[2]);
